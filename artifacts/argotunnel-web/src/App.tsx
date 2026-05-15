@@ -13,6 +13,7 @@ import { Algorithms } from "@/pages/algorithms";
 import { Scanner } from "@/pages/scanner";
 import { Downloads } from "@/pages/downloads";
 import { About } from "@/pages/about";
+import { BrowserProxy } from "@/pages/browser-proxy";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/profiles" component={Profiles} />
         <Route path="/algorithms" component={Algorithms} />
+        <Route path="/browser-proxy" component={BrowserProxy} />
         <Route path="/scanner" component={Scanner} />
         <Route path="/downloads" component={Downloads} />
         <Route path="/about" component={About} />

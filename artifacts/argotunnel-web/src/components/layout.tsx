@@ -7,7 +7,8 @@ import {
   DownloadCloud, 
   Info,
   Menu,
-  X
+  X,
+  Globe
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useHealthCheck } from "@workspace/api-client-react";
@@ -27,6 +28,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", label: "OPS DASHBOARD", icon: Activity },
     { href: "/profiles", label: "AI MORPH", icon: Shield },
     { href: "/algorithms", label: "DPI EVASION", icon: Cpu },
+    { href: "/browser-proxy", label: "BROWSER PROXY", icon: Globe },
     { href: "/scanner", label: "IP SCANNER", icon: Radar },
     { href: "/downloads", label: "DEPLOYMENTS", icon: DownloadCloud },
     { href: "/about", label: "SYS SPECS", icon: Info },

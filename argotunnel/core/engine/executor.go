@@ -24,9 +24,9 @@ import (
 )
 
 type Executor struct {
-	caps         capabilities.CapabilitySet
+	caps          capabilities.CapabilitySet
 	frontingHosts []string
-	cleanIPs     []string
+	cleanIPs      []string
 }
 
 func NewExecutor(c capabilities.CapabilitySet) *Executor {
@@ -36,6 +36,7 @@ func NewExecutor(c capabilities.CapabilitySet) *Executor {
 func (e *Executor) Start() error {
 	log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	log.Println("  ArgoTunnel Ultimate v2.0 – Iran Censorship Bypass")
+	log.Println("  DPI Algorithm Rotation: every 2 seconds automatic")
 	log.Println("  Modules: WG + SS + Psiphon + PQC + AI + GAN + RL")
 	log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
@@ -83,14 +84,21 @@ func (e *Executor) Start() error {
 	if e.caps.UseUTLS {
 		obfs.EnableUTLS(e.caps.UTLSProfile)
 	} else {
-		obfs.EnableUTLS("chrome_124")
+		obfs.EnableUTLS("chrome_100")
 	}
 
 	if e.caps.FragSize > 0 {
 		obfs.EnableFragmentation(e.caps.FragSize)
 	}
 
-	dpiA := dpi_analyzer.NewAnalyzer()
+	// DPI Analyzer — singleton with probe detection
+	dpiA := dpi_analyzer.Get()
+	dpiA.OnDetection(func(p dpi_analyzer.Pattern) {
+		log.Printf("[Engine] DPI probe detected: %s → forcing algorithm switch", p.Name)
+		dynamic_orchestra.Get().ForceSwitch()
+	})
+	dpiA.SimulateProbeDetection()
+
 	rl_agent.StartLearning()
 
 	go func() {
@@ -98,7 +106,6 @@ func (e *Executor) Start() error {
 		defer ticker.Stop()
 		for range ticker.C {
 			bestProfile := rl_agent.GetRecommendedProfile()
-			dpiA.SetProfile(bestProfile)
 			ai_morph.SetActiveProfile(bestProfile)
 		}
 	}()
@@ -127,12 +134,16 @@ func (e *Executor) Start() error {
 
 	gan_generator.EnableGANMorphing(20 * time.Second)
 	quic_masq.EnableQUICWrapper(primary)
-	dynamic_orchestra.NewOrchestrator(primary, secondary).Start()
+
+	// Start auto-rotating DPI bypass (every 2 seconds)
+	orch := dynamic_orchestra.Get()
+	orch.Start()
+	_ = secondary
 
 	if e.caps.PsiphonFallback {
 		go psiphon.StartFallback()
 	}
 
-	log.Println("[Engine] 🚀 All modules initialized – bypassing Iran censorship...")
+	log.Println("[Engine] 🚀 All modules active — auto-rotating DPI bypass every 2s")
 	return primary.Start()
 }

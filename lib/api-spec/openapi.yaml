@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ArgoTunnel Ultimate API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: tunnel
+    description: Tunnel control
+  - name: stats
+    description: Real-time statistics
+  - name: profiles
+    description: AI morph profiles
+  - name: downloads
+    description: Platform downloads
+  - name: scanner
+    description: IP scanner
+  - name: algorithm
+    description: DPI bypass algorithms
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,194 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /tunnel/status:
+    get:
+      operationId: getTunnelStatus
+      tags: [tunnel]
+      summary: Get tunnel connection status
+      responses:
+        "200":
+          description: Current tunnel status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TunnelStatus"
+
+  /tunnel/connect:
+    post:
+      operationId: connectTunnel
+      tags: [tunnel]
+      summary: Connect tunnel
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectInput"
+      responses:
+        "200":
+          description: Connection initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TunnelStatus"
+
+  /tunnel/disconnect:
+    post:
+      operationId: disconnectTunnel
+      tags: [tunnel]
+      summary: Disconnect tunnel
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TunnelStatus"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [stats]
+      summary: Get real-time statistics
+      responses:
+        "200":
+          description: Current stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TunnelStats"
+
+  /stats/history:
+    get:
+      operationId: getStatsHistory
+      tags: [stats]
+      summary: Get historical bandwidth stats (last 60 points)
+      responses:
+        "200":
+          description: History array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatsPoint"
+
+  /profiles:
+    get:
+      operationId: getProfiles
+      tags: [profiles]
+      summary: List all AI morph profiles
+      responses:
+        "200":
+          description: Profile list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MorphProfile"
+
+  /profiles/active:
+    get:
+      operationId: getActiveProfile
+      tags: [profiles]
+      summary: Get currently active profile
+      responses:
+        "200":
+          description: Active profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MorphProfile"
+    post:
+      operationId: setActiveProfile
+      tags: [profiles]
+      summary: Set active AI morph profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileInput"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MorphProfile"
+
+  /algorithm:
+    get:
+      operationId: getCurrentAlgorithm
+      tags: [algorithm]
+      summary: Get current DPI bypass algorithm
+      responses:
+        "200":
+          description: Current algorithm info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlgorithmStatus"
+
+  /algorithm/list:
+    get:
+      operationId: listAlgorithms
+      tags: [algorithm]
+      summary: List all DPI bypass algorithms
+      responses:
+        "200":
+          description: Algorithm list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlgorithmInfo"
+
+  /downloads:
+    get:
+      operationId: getDownloads
+      tags: [downloads]
+      summary: Get download links for all platforms
+      responses:
+        "200":
+          description: Download links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DownloadEntry"
+
+  /scanner/results:
+    get:
+      operationId: getScannerResults
+      tags: [scanner]
+      summary: Get clean IP scanner results
+      responses:
+        "200":
+          description: Scanner results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScannerResults"
+
+  /scanner/start:
+    post:
+      operationId: startScanner
+      tags: [scanner]
+      summary: Start IP scanner
+      responses:
+        "200":
+          description: Scanner started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScannerResults"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +232,168 @@ components:
       required:
         - status
 
+    TunnelStatus:
+      type: object
+      required: [connected, protocol, profile, uptime, ping, pqcEnabled, autoRotate]
+      properties:
+        connected:
+          type: boolean
+        protocol:
+          type: string
+        profile:
+          type: string
+        uptime:
+          type: integer
+        ping:
+          type: integer
+        pqcEnabled:
+          type: boolean
+        autoRotate:
+          type: boolean
+        currentAlgorithm:
+          type: string
+        rotationInterval:
+          type: integer
+
+    ConnectInput:
+      type: object
+      properties:
+        profile:
+          type: string
+        protocol:
+          type: string
+
+    TunnelStats:
+      type: object
+      required: [bytesIn, bytesOut, speedIn, speedOut, packetsIn, packetsOut, uptime, activeConnections]
+      properties:
+        bytesIn:
+          type: integer
+        bytesOut:
+          type: integer
+        speedIn:
+          type: integer
+        speedOut:
+          type: integer
+        packetsIn:
+          type: integer
+        packetsOut:
+          type: integer
+        uptime:
+          type: integer
+        activeConnections:
+          type: integer
+
+    StatsPoint:
+      type: object
+      required: [timestamp, speedIn, speedOut]
+      properties:
+        timestamp:
+          type: integer
+        speedIn:
+          type: integer
+        speedOut:
+          type: integer
+
+    MorphProfile:
+      type: object
+      required: [id, name, description, active, bypassRate, trafficPattern]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+        bypassRate:
+          type: integer
+        trafficPattern:
+          type: string
+
+    ProfileInput:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+
+    AlgorithmStatus:
+      type: object
+      required: [name, index, total, rotationInterval, nextRotation, effectiveness]
+      properties:
+        name:
+          type: string
+        index:
+          type: integer
+        total:
+          type: integer
+        rotationInterval:
+          type: integer
+        nextRotation:
+          type: integer
+        effectiveness:
+          type: integer
+
+    AlgorithmInfo:
+      type: object
+      required: [id, name, description, technique, active]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        technique:
+          type: string
+        active:
+          type: boolean
+
+    DownloadEntry:
+      type: object
+      required: [platform, version, filename, size, url, checksum]
+      properties:
+        platform:
+          type: string
+        version:
+          type: string
+        filename:
+          type: string
+        size:
+          type: string
+        url:
+          type: string
+        checksum:
+          type: string
+        buildDate:
+          type: string
+
+    ScannerResults:
+      type: object
+      required: [scanning, totalScanned, cleanIPs, lastUpdated]
+      properties:
+        scanning:
+          type: boolean
+        totalScanned:
+          type: integer
+        cleanIPs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CleanIP"
+        lastUpdated:
+          type: integer
+
+    CleanIP:
+      type: object
+      required: [ip, latency, location, cdn]
+      properties:
+        ip:
+          type: string
+        latency:
+          type: integer
+        location:
+          type: string
+        cdn:
+          type: string

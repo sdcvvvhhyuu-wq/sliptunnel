@@ -1,0 +1,46 @@
+name: ArgoTunnel
+options:
+  bundleIdPrefix: com.argotunnel
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "15"
+
+targets:
+  ArgoTunnel:
+    type: application
+    platform: iOS
+    sources:
+      - path: ArgoTunnel
+    info:
+      path: ArgoTunnel/Info.plist
+      properties:
+        CFBundleDisplayName: ArgoTunnel
+        CFBundleShortVersionString: "2.0"
+        CFBundleVersion: "2"
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.argotunnel.app
+      SWIFT_VERSION: 5.9
+    dependencies:
+      - target: PacketTunnel
+
+  PacketTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PacketTunnelProvider
+    info:
+      path: PacketTunnelProvider/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    entitlements:
+      path: PacketTunnelProvider/Entitlements.plist
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.argotunnel.app.tunnel
+      SWIFT_VERSION: 5.9

@@ -1,0 +1,36 @@
+{
+  "version": "2.0",
+  "transport": "wireguard",
+  "fallback": ["shadowsocks", "psiphon"],
+  "pqc": {
+    "enabled": true,
+    "algorithm": "kyber1024",
+    "key_rotation_seconds": 45
+  },
+  "ai_morph": {
+    "enabled": true,
+    "default_profile": "chrome_124",
+    "auto_switch": true
+  },
+  "dpi_bypass": {
+    "fragmentation": true,
+    "frag_size": 150,
+    "utls": true,
+    "utls_profile": "chrome_124",
+    "domain_fronting": true
+  },
+  "scanner": {
+    "enabled": true,
+    "cidrs": ["104.16.0.0/12", "172.64.0.0/13"],
+    "interval_minutes": 10
+  },
+  "proxy": {
+    "socks5_port": 1080,
+    "http_port": 8080
+  },
+  "dns": {
+    "upstream": ["1.1.1.1", "8.8.8.8"],
+    "local_port": 5353,
+    "tunnel_enabled": true
+  }
+}

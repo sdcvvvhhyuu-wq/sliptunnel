@@ -1,0 +1,52 @@
+# Build outputs
+*.apk
+*.ipa
+*.exe
+argoscan
+argotunnel
+ArgoTunnel
+ArgoTunnel-linux-*
+*.tar.gz
+*.zip
+
+# Android
+.gradle/
+local.properties
+android/app/build/
+android/build/
+android/.idea/
+*.iml
+.externalNativeBuild/
+.cxx/
+
+# iOS
+ios/build/
+ios/ArgoTunnel.xcodeproj/
+ios/Payload/
+ios/*.xcworkspace
+DerivedData/
+
+# Go
+core/vendor/
+go.sum
+*/go.sum
+
+# Logs
+*.log
+argotunnel.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keys and secrets
+*.keystore
+*.jks
+*.p12
+debug.keystore

@@ -1,0 +1,342 @@
+name: ArgoTunnel Ultimate – Full Auto Build & Sign
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'نسخه (مثل v1.2.3) – خالی = افزایش خودکار'
+        required: false
+        type: string
+      auto_bump:
+        description: 'نوع افزایش خودکار نسخه'
+        required: false
+        default: 'patch'
+        type: choice
+        options: ['patch', 'minor', 'major']
+      release_name:
+        description: 'عنوان انتشار (اختیاری)'
+        required: false
+        type: string
+      prerelease:
+        description: 'آیا pre-release باشد؟'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOPROXY: 'https://goproxy.cn,direct'
+  GONOSUMDB: '*'
+  GOFLAGS: '-mod=mod'
+  GO_VERSION: '1.23'
+
+jobs:
+  # ─── Android APK ──────────────────────────────────────────────────────────
+  android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle Wrapper
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq wget unzip
+          wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q gradle-8.2-bin.zip
+          export PATH=$PWD/gradle-8.2/bin:$PATH
+          cd android
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build Release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK with debug keystore
+        run: |
+          keytool -genkey -v \
+            -keystore debug.keystore \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=ArgoTunnel,O=ArgoTunnel,C=IR" 2>/dev/null || true
+
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            echo "Signing: $apk"
+            jarsigner -verbose \
+              -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore debug.keystore \
+              -storepass android -keypass android \
+              "$apk" androiddebugkey
+
+            if command -v zipalign &>/dev/null; then
+              zipalign -v -p 4 "$apk" "${apk%.apk}-aligned.apk"
+              mv "${apk%.apk}-aligned.apk" "$apk"
+            fi
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+  # ─── Windows EXE ─────────────────────────────────────────────────────────
+  windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Build Windows (GUI hidden)
+        shell: powershell
+        run: |
+          cd core
+          Remove-Item -Force go.sum -ErrorAction SilentlyContinue
+          go mod tidy
+          $env:GOOS="windows"
+          $env:GOARCH="amd64"
+          $env:CGO_ENABLED="0"
+          go build -ldflags="-H windowsgui -s -w" -o ../windows/ArgoTunnel.exe .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: windows/ArgoTunnel.exe
+
+  # ─── Linux Binaries ───────────────────────────────────────────────────────
+  linux:
+    name: Build Linux (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64, arm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Install cross-compile tools
+        if: matrix.arch != 'amd64'
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+      - name: Build Linux static binary
+        run: |
+          cd core
+          rm -f go.sum
+          go mod tidy
+          export CGO_ENABLED=0
+          export GOOS=linux
+          export GOARCH=${{ matrix.arch }}
+          go build -ldflags="-s -w" -o ../linux/ArgoTunnel-linux-${{ matrix.arch }} .
+          echo "✅ Built: ArgoTunnel-linux-${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: linux/ArgoTunnel-linux-${{ matrix.arch }}
+
+  # ─── iOS IPA ────────────────────────────────────────────────────────────
+  ios:
+    name: Build iOS IPA
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: cd ios && xcodegen generate
+      - name: Build unsigned IPA
+        run: |
+          cd ios
+          xcodebuild clean build \
+            -project ArgoTunnel.xcodeproj \
+            -scheme ArgoTunnel \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="" \
+            -derivedDataPath ./build 2>&1 | tail -20
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/ArgoTunnel.app Payload/
+          zip -r ArgoTunnel.ipa Payload
+          echo "✅ IPA built successfully"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: ios/ArgoTunnel.ipa
+
+  # ─── OpenWrt Package ─────────────────────────────────────────────────────
+  openwrt:
+    name: Build OpenWrt Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Build OpenWrt MIPS binary
+        run: |
+          cd core
+          rm -f go.sum
+          go mod tidy
+          CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat \
+            go build -ldflags="-s -w" -o ../openwrt/files/argotunnel .
+          echo "✅ OpenWrt MIPS binary built"
+      - name: Package OpenWrt ipk
+        run: |
+          mkdir -p openwrt-build/package/argotunnel
+          cp openwrt/Makefile openwrt-build/package/argotunnel/
+          cp openwrt/files/argotunnel.init openwrt-build/package/argotunnel/
+          tar -czf openwrt-package.tar.gz -C openwrt-build package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-package
+          path: openwrt-package.tar.gz
+
+  # ─── Scanner CLI ─────────────────────────────────────────────────────────
+  scanner:
+    name: Build Scanner CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - name: Build argoscan CLI
+        run: |
+          cd scanner-cli
+          go mod tidy
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o argoscan .
+          echo "✅ argoscan built"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scanner-cli
+          path: scanner-cli/argoscan
+
+  # ─── Release ─────────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: [android, windows, linux, ios, openwrt, scanner]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      !cancelled() &&
+      (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            TAG="${{ inputs.version }}"
+          else
+            latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            ver=${latest#v}
+            IFS='.' read -r major minor patch <<< "$ver"
+            case "${{ inputs.auto_bump }}" in
+              major) major=$((major+1)); minor=0; patch=0 ;;
+              minor) minor=$((minor+1)); patch=0 ;;
+              *) patch=$((patch+1)) ;;
+            esac
+            TAG="v${major}.${minor}.${patch}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          NAME="${{ inputs.release_name }}"
+          [ -z "$NAME" ] && NAME="ArgoTunnel $TAG"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "prerelease=${{ inputs.prerelease || 'false' }}" >> $GITHUB_OUTPUT
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: ./all-artifacts
+
+      - name: Prepare release assets
+        run: |
+          VERSION="${{ steps.meta.outputs.tag }}"
+          mkdir -p release-assets
+
+          find all-artifacts -name "*.apk" -exec cp {} "release-assets/ArgoTunnel-${VERSION}.apk" \; 2>/dev/null || true
+          find all-artifacts -name "ArgoTunnel.exe" -exec cp {} "release-assets/ArgoTunnel-${VERSION}.exe" \; 2>/dev/null || true
+          for arch in amd64 arm64 arm; do
+            find all-artifacts -name "ArgoTunnel-linux-${arch}" -exec cp {} "release-assets/ArgoTunnel-linux-${arch}-${VERSION}" \; 2>/dev/null || true
+          done
+          find all-artifacts -name "ArgoTunnel.ipa" -exec cp {} "release-assets/ArgoTunnel-${VERSION}.ipa" \; 2>/dev/null || true
+          find all-artifacts -name "openwrt-package.tar.gz" -exec cp {} "release-assets/ArgoTunnel-openwrt-${VERSION}.tar.gz" \; 2>/dev/null || true
+          find all-artifacts -name "argoscan" -exec cp {} "release-assets/argoscan-linux-${VERSION}" \; 2>/dev/null || true
+
+          cd release-assets && sha256sum * > SHA256SUMS-${VERSION}.txt || true
+          echo "📦 Release assets:"
+          ls -lh release-assets/
+
+      - name: Generate changelog
+        id: notes
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            LOG=$(git log ${PREV}..HEAD --pretty=format:"- %s" --no-merges 2>/dev/null || echo "")
+          else
+            LOG="🎉 اولین انتشار رسمی ArgoTunnel Ultimate"
+          fi
+          {
+            echo "body<<NOTES_EOF"
+            echo "## ArgoTunnel Ultimate ${TAG}"
+            echo ""
+            echo "### قابلیت‌های کلیدی"
+            echo "- 🔐 رمزگذاری کوانتومی Kyber-1024 (PQC)"
+            echo "- 🤖 هوش مصنوعی تطبیق ترافیک (Q-Learning + GAN)"
+            echo "- 🛡️ دور زدن DPI پیشرفته ایران"
+            echo "- 🌐 تانل چندگانه: WireGuard + Shadowsocks + Psiphon"
+            echo "- 🔍 اسکنر خودکار IP و دامنه پاک"
+            echo "- 🚀 پشتیبانی از Android, Windows, Linux, iOS, OpenWrt"
+            echo ""
+            echo "### تغییرات این نسخه"
+            echo "$LOG"
+            echo ""
+            echo "### فایل‌های آپلود شده"
+            echo "| فایل | پلتفرم |"
+            echo "|------|--------|"
+            echo "| \`ArgoTunnel-${TAG}.apk\` | Android (signed debug) |"
+            echo "| \`ArgoTunnel-${TAG}.exe\` | Windows x64 |"
+            echo "| \`ArgoTunnel-linux-amd64-${TAG}\` | Linux x64 |"
+            echo "| \`ArgoTunnel-linux-arm64-${TAG}\` | Linux ARM64 |"
+            echo "| \`ArgoTunnel-linux-arm-${TAG}\` | Linux ARM |"
+            echo "| \`ArgoTunnel-${TAG}.ipa\` | iOS (unsigned) |"
+            echo "| \`ArgoTunnel-openwrt-${TAG}.tar.gz\` | OpenWrt |"
+            echo "| \`argoscan-linux-${TAG}\` | IP Scanner CLI |"
+            echo "NOTES_EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          body: ${{ steps.notes.outputs.body }}
+          files: release-assets/*
+          fail_on_unmatched_files: false
+          make_latest: true

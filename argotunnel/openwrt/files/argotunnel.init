@@ -1,0 +1,43 @@
+#!/bin/sh /etc/rc.common
+# ArgoTunnel OpenWrt init script
+# AI/Quantum Anti-Censorship for OpenWrt routers
+
+START=99
+STOP=10
+USE_PROCD=1
+
+PROG=/usr/bin/argotunnel
+PIDFILE=/var/run/argotunnel.pid
+LOGFILE=/var/log/argotunnel.log
+
+start_service() {
+    procd_open_instance
+    procd_set_param command $PROG
+    procd_set_param respawn 3600 5 5
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_set_param pidfile $PIDFILE
+    procd_close_instance
+    echo "ArgoTunnel v2.0 started"
+}
+
+stop_service() {
+    if [ -f "$PIDFILE" ]; then
+        kill $(cat "$PIDFILE") 2>/dev/null
+        rm -f "$PIDFILE"
+    fi
+    echo "ArgoTunnel stopped"
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 $(cat "$PIDFILE") 2>/dev/null; then
+        echo "ArgoTunnel is running (PID: $(cat $PIDFILE))"
+    else
+        echo "ArgoTunnel is not running"
+    fi
+}
+
+reload() {
+    stop
+    start
+}
